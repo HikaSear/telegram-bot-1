@@ -27,40 +27,25 @@ EXAMPLES = {
     "Как зовут владельца чата?": "Маша"
 }
 
-# Структура: {chat_id: {"question": str, "answer": str, "messages": [id1, id2...]}}
+# Структура: {chat_id: {"question": str, "answer": str}}
 active_examples = {}
 
 logging.basicConfig(level=logging.INFO)
 dp = Dispatcher()
 
 
-# --- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ОЧИСТКИ ---
-async def clear_old_messages(bot: Bot, chat_id: int):
-    if chat_id in active_examples:
-        for msg_id in active_examples[chat_id].get("messages", []):
-            try:
-                await bot.delete_message(chat_id, msg_id)
-            except TelegramBadRequest:
-                pass  # Сообщение уже удалено или слишком старое
-        active_examples[chat_id]["messages"] = []
-
-
 # --- ФУНКЦИЯ ОТПРАВКИ ПРИМЕРА ---
 async def send_random_example(bot: Bot, chat_id: int):
-    # Сначала удаляем старое, если есть
-    await clear_old_messages(bot, chat_id)
-
     question, answer = random.choice(list(EXAMPLES.items()))
 
-    sent_msg = await bot.send_message(
+    await bot.send_message(
         chat_id,
         f"🎲 <b>Решите пример:</b>\n{question}"
     )
 
     active_examples[chat_id] = {
         "question": question,
-        "answer": answer,
-        "messages": [sent_msg.message_id]
+        "answer": answer
     }
 
 
@@ -84,20 +69,8 @@ async def cmd_roulette(message: Message, bot: Bot):
     if message.chat.type not in [ChatType.GROUP, ChatType.SUPERGROUP]:
         return await message.answer("Рулетка только для групп!")
 
-    # Шанс 1 из 7
-    if random.randint(1, 7) == 1:
-        try:
-            # Мут на 60 секунд
-            until_date = int(time.time()) + 60
-            await bot.restrict_chat_member(
-                chat_id=message.chat.id,
-                user_id=message.from_user.id,
-                permissions=ChatPermissions(can_send_messages=False),
-                until_date=until_date
-            )
-            await message.reply("💥 БАХ! Тебе не повезло. Мут на 1 минуту.")
-        except TelegramBadRequest:
-            await message.reply("Упс! Кажется, у меня нет прав мутить пользователей (или ты админ).")
+    if random.randint(1, 2) == 1:
+        await message.reply("💥 БАХ! Тебе не повезло. Мут на 1 минуту.")
     else:
         await message.reply("🎉 Щелчок... Тебе повезло, патрон не выстрелил!")
 
@@ -118,11 +91,7 @@ async def check_answer(message: Message, bot: Bot):
 
     chat_id = message.chat.id
 
-    # Если есть активный пример в этом чате
     if chat_id in active_examples:
-        # Добавляем ID сообщения пользователя в список на удаление
-        active_examples[chat_id]["messages"].append(message.message_id)
-
         # Проверяем, является ли это ответом на сообщение бота
         if message.reply_to_message and message.reply_to_message.from_user.id == bot.id:
             data = active_examples[chat_id]
@@ -131,13 +100,9 @@ async def check_answer(message: Message, bot: Bot):
 
             if user_answer == correct_answer:
                 await message.reply(f"✅ <b>Верно, {message.from_user.first_name}!</b>")
-                # Очистим всё через 3 секунды, чтобы люди успели увидеть ответ
-                await asyncio.sleep(3)
-                await clear_old_messages(bot, chat_id)
                 del active_examples[chat_id]
 
-                # Запускаем таймер до следующего примера
-                asyncio.create_task(delayed_example(bot, chat_id, 1800))
+                asyncio.create_task(delayed_example(bot, chat_id, 600))
 
 
 async def main():
