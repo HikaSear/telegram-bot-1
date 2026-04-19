@@ -32,6 +32,7 @@ active_examples = {}
 logging.basicConfig(level=logging.INFO)
 dp = Dispatcher()
 
+
 # --- ФУНКЦИЯ УДАЛЕНИЯ ЧЕРЕЗ ВРЕМЯ ---
 async def delete_after_delay(message: Message, delay: int = 180):
     """Удаляет сообщение через указанное количество секунд (по умолчанию 3 минуты)"""
@@ -44,6 +45,7 @@ async def delete_after_delay(message: Message, delay: int = 180):
     except Exception as e:
         logging.error(f"Ошибка при удалении: {e}")
 
+
 # --- ФУНКЦИЯ ОТПРАВКИ ПРИМЕРА ---
 async def send_random_example(bot: Bot, chat_id: int):
     question, answer = random.choice(list(EXAMPLES.items()))
@@ -52,7 +54,7 @@ async def send_random_example(bot: Bot, chat_id: int):
         chat_id,
         f"🎲 <b>Дайте ответ на вопрос:</b>\n{question}"
     )
-    
+
     # Автоудаление самого вопроса через 3 минуты
     asyncio.create_task(delete_after_delay(sent_msg))
 
@@ -61,41 +63,45 @@ async def send_random_example(bot: Bot, chat_id: int):
         "answer": answer
     }
 
+
 async def delayed_example(bot: Bot, chat_id: int, delay: int):
     await asyncio.sleep(delay)
     await send_random_example(bot, chat_id)
+
 
 # --- КОМАНДЫ ---
 @dp.message(Command("example"))
 async def cmd_example(message: Message, bot: Bot):
     # Удаляем саму команду /example
     asyncio.create_task(delete_after_delay(message))
-    
+
     if message.chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
         await send_random_example(bot, message.chat.id)
     else:
         await message.answer("Эта команда работает только в группах.")
 
+
 @dp.message(Command("roulette"))
 async def cmd_roulette(message: Message):
     # Удаляем команду /roulette
     asyncio.create_task(delete_after_delay(message))
-    
+
     if message.chat.type not in [ChatType.GROUP, ChatType.SUPERGROUP]:
         return await message.answer("Рулетка только для групп!")
 
     text = ""
     if random.randint(0, 100) % 2 == 0:
-        if random.randint(0, 100) % 2 == 0:
+        if random.randint(0, 100) == 0:
             text = f"💥 БАХ! Тебе не повезло втройне\n(шанс выпадения этого сообщения очень мал). {message.from_user.first_name} лох."
         else:
             text = "💥 БАХ! Тебе не повезло."
     else:
         text = "🎉 Щелчок... Тебе повезло, патрон не выстрелил!"
-    
+
     sent_msg = await message.reply(text)
     # Удаляем ответ рулетки
     asyncio.create_task(delete_after_delay(sent_msg))
+
 
 @dp.message()
 async def check_answer(message: Message, bot: Bot):
@@ -122,9 +128,11 @@ async def check_answer(message: Message, bot: Bot):
                 # Планируем следующий пример через 10 минут (600 сек)
                 asyncio.create_task(delayed_example(bot, chat_id, 600))
 
+
 async def main():
     bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     await dp.start_polling(bot)
+
 
 if __name__ == "__main__":
     try:
