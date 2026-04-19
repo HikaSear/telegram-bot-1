@@ -4,9 +4,10 @@ import random
 import logging
 from aiogram import Bot, Dispatcher
 from aiogram.filters import Command, ChatMemberUpdatedFilter
-from aiogram.types import Message, ChatMemberUpdated
+from aiogram.types import Message
 from aiogram.enums import ChatType, ParseMode, ChatMemberStatus
 from aiogram.client.default import DefaultBotProperties
+from aiogram.exceptions import TelegramBadRequest
 
 TOKEN = os.getenv("BOT_TOKEN")
 
@@ -31,56 +32,70 @@ active_examples = {}
 logging.basicConfig(level=logging.INFO)
 dp = Dispatcher()
 
+# --- ФУНКЦИЯ УДАЛЕНИЯ ЧЕРЕЗ ВРЕМЯ ---
+async def delete_after_delay(message: Message, delay: int = 180):
+    """Удаляет сообщение через указанное количество секунд (по умолчанию 3 минуты)"""
+    await asyncio.sleep(delay)
+    try:
+        await message.delete()
+    except TelegramBadRequest:
+        # Сообщение уже удалено или у бота нет прав
+        pass
+    except Exception as e:
+        logging.error(f"Ошибка при удалении: {e}")
 
 # --- ФУНКЦИЯ ОТПРАВКИ ПРИМЕРА ---
 async def send_random_example(bot: Bot, chat_id: int):
     question, answer = random.choice(list(EXAMPLES.items()))
 
-    await bot.send_message(
+    sent_msg = await bot.send_message(
         chat_id,
         f"🎲 <b>Дайте ответ на вопрос:</b>\n{question}"
     )
+    
+    # Автоудаление самого вопроса через 3 минуты
+    asyncio.create_task(delete_after_delay(sent_msg))
 
     active_examples[chat_id] = {
         "question": question,
         "answer": answer
     }
 
-
 async def delayed_example(bot: Bot, chat_id: int, delay: int):
     await asyncio.sleep(delay)
     await send_random_example(bot, chat_id)
 
-
 # --- КОМАНДЫ ---
-
 @dp.message(Command("example"))
 async def cmd_example(message: Message, bot: Bot):
+    # Удаляем саму команду /example
+    asyncio.create_task(delete_after_delay(message))
+    
     if message.chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
         await send_random_example(bot, message.chat.id)
     else:
         await message.answer("Эта команда работает только в группах.")
 
-
 @dp.message(Command("roulette"))
 async def cmd_roulette(message: Message):
+    # Удаляем команду /roulette
+    asyncio.create_task(delete_after_delay(message))
+    
     if message.chat.type not in [ChatType.GROUP, ChatType.SUPERGROUP]:
         return await message.answer("Рулетка только для групп!")
 
-    if random.randint(1, 2) == 1:
-        if random.randint(0, 100) == 0:
-            await message.reply(f"💥 БАХ! Тебе не повезло втройне\n(шанс выпадения этого сообщения 0.5%). {message.from_user.first_name} лох")
+    text = ""
+    if random.randint(0, 100) % 2 == 0:
+        if random.randint(0, 100) % 2 == 0:
+            text = f"💥 БАХ! Тебе не повезло втройне\n(шанс выпадения этого сообщения очень мал). {message.from_user.first_name} лох."
         else:
-            await message.reply("💥 БАХ! Тебе не повезло.")
+            text = "💥 БАХ! Тебе не повезло."
     else:
-        await message.reply("🎉 Щелчок... Тебе повезло, патрон не выстрелил!")
-
-
-@dp.my_chat_member(
-    ChatMemberUpdatedFilter(
-        member_status_changed=(ChatMemberStatus.LEFT, ChatMemberStatus.MEMBER)
-    )
-)
+        text = "🎉 Щелчок... Тебе повезло, патрон не выстрелил!"
+    
+    sent_msg = await message.reply(text)
+    # Удаляем ответ рулетки
+    asyncio.create_task(delete_after_delay(sent_msg))
 
 @dp.message()
 async def check_answer(message: Message, bot: Bot):
@@ -90,22 +105,26 @@ async def check_answer(message: Message, bot: Bot):
     chat_id = message.chat.id
 
     if chat_id in active_examples:
+        # Проверяем, что это ответ на сообщение бота
         if message.reply_to_message and message.reply_to_message.from_user.id == bot.id:
             data = active_examples[chat_id]
             user_answer = message.text.strip().lower()
             correct_answer = data["answer"].lower()
 
             if user_answer == correct_answer:
-                await message.reply(f"✅ <b>Верно, {message.from_user.first_name}!</b>")
+                sent_msg = await message.reply(f"✅ <b>Верно, {message.from_user.first_name}!</b>")
                 del active_examples[chat_id]
 
-                asyncio.create_task(delayed_example(bot, chat_id, 600))
+                # Удаляем сообщение пользователя с ответом и поздравление бота
+                asyncio.create_task(delete_after_delay(message))
+                asyncio.create_task(delete_after_delay(sent_msg))
 
+                # Планируем следующий пример через 10 минут (600 сек)
+                asyncio.create_task(delayed_example(bot, chat_id, 600))
 
 async def main():
     bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     await dp.start_polling(bot)
-
 
 if __name__ == "__main__":
     try:
