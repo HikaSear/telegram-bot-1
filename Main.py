@@ -2,15 +2,11 @@ import asyncio
 import os
 import random
 import logging
-from aiogram import Bot, Dispatcher, types
+from aiogram import Bot, Dispatcher
 from aiogram.filters import Command, ChatMemberUpdatedFilter
 from aiogram.types import Message, ChatMemberUpdated
 from aiogram.enums import ChatType, ParseMode, ChatMemberStatus
 from aiogram.client.default import DefaultBotProperties
-from dotenv import load_dotenv  # Добавьте импорт
-
-# Загружаем .env файл
-load_dotenv()
 
 # --- НАСТРОЙКИ ---
 TOKEN = os.getenv("BOT_TOKEN")
@@ -104,9 +100,9 @@ async def main():
     # ✅ СОЗДАЕМ ОБЪЕКТ БОТА ЗДЕСЬ
     if not TOKEN:
         raise ValueError("BOT_TOKEN не найден в .env файле!")
-    
+
     bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-    
+
     # Запускаем поллинг
     await dp.start_polling(bot)
 
