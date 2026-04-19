@@ -7,6 +7,11 @@ from aiogram.filters import Command, ChatMemberUpdatedFilter
 from aiogram.types import Message, ChatMemberUpdated
 from aiogram.enums import ChatType, ParseMode, ChatMemberStatus
 from aiogram.client.default import DefaultBotProperties
+from dotenv import load_dotenv  # Добавьте импорт
+
+# Загружаем .env файл
+load_dotenv()
+
 # --- НАСТРОЙКИ ---
 TOKEN = os.getenv("BOT_TOKEN")
 
@@ -96,7 +101,15 @@ async def check_answer(message: Message, bot: Bot):
 
 
 async def main():
+    # ✅ СОЗДАЕМ ОБЪЕКТ БОТА ЗДЕСЬ
+    if not TOKEN:
+        raise ValueError("BOT_TOKEN не найден в .env файле!")
+    
+    bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    
+    # Запускаем поллинг
     await dp.start_polling(bot)
+
 
 if __name__ == "__main__":
     try:
